@@ -1,0 +1,492 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny catch-all safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && request.auth.token.email == 'dicw81.mail@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidMemberUids(listData) {
+      return listData is list
+        && listData.size() >= 1
+        && listData.size() <= 15
+        && listData[0] is string
+        && isValidId(listData[0]);
+    }
+
+    function isDocMember(data) {
+      return data.ownerId == request.auth.uid
+        || (data.keys().hasAll(['memberUids']) && request.auth.uid in data.memberUids);
+    }
+
+    function isWorkspaceMember(workspaceId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+        && (
+          get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid
+          || request.auth.uid in get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.memberUids
+        );
+    }
+
+    // --- Entity Validation Blueprints ---
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll(['uid', 'displayName', 'roleLabel', 'unitName', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'roleLabel', 'unitName', 'activeWorkspaceId', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid == userId && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.roleLabel is string && data.roleLabel.size() >= 1 && data.roleLabel.size() <= 60
+        && data.unitName is string && data.unitName.size() <= 100
+        && (!data.keys().hasAny(['activeWorkspaceId']) || (data.activeWorkspaceId is string && isValidId(data.activeWorkspaceId)))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidWorkspace(data) {
+      return data.keys().hasAll([
+          'ownerId', 'name', 'inviteCode', 'lastJoinCode',
+          'memberUids', 'memberNames', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'name', 'inviteCode', 'lastJoinCode',
+          'memberUids', 'memberNames', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 100
+        && data.inviteCode is string && data.inviteCode.size() >= 6 && data.inviteCode.size() <= 32 && data.inviteCode.matches('^[a-zA-Z0-9_\\-]+$')
+        && data.lastJoinCode is string && data.lastJoinCode.size() <= 32
+        && isValidMemberUids(data.memberUids)
+        && data.memberNames is map && data.memberNames.size() >= 1 && data.memberNames.size() <= 15
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidInvite(data, workspaceId) {
+      return data.keys().hasAll(['workspaceId', 'workspaceName', 'ownerId', 'active', 'createdAt'])
+        && data.keys().hasOnly(['workspaceId', 'workspaceName', 'ownerId', 'active', 'createdAt'])
+        && data.workspaceId == workspaceId && isValidId(data.workspaceId)
+        && data.workspaceName is string && data.workspaceName.size() >= 2 && data.workspaceName.size() <= 100
+        && isValidId(data.ownerId)
+        && data.active is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidFuelType(fuelType) {
+      return fuelType in ['Pertamax', 'Pertalite', 'Dexlite', 'Solar'];
+    }
+
+    function isValidDateString(d) {
+      return d is string && d.size() == 10 && d.matches('^\\d{4}-\\d{2}-\\d{2}$');
+    }
+
+    function isValidCouponBatch(data) {
+      return data.keys().hasAll([
+          'ownerId', 'workspaceId', 'memberUids',
+          'batchCode', 'source', 'receivedByOfficial', 'receivedDate',
+          'fuelType', 'nominalValue', 'litersPerCoupon', 'prefix',
+          'startNumber', 'endNumber', 'totalCount', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'workspaceId', 'memberUids',
+          'batchCode', 'source', 'receivedByOfficial', 'receivedDate',
+          'fuelType', 'nominalValue', 'litersPerCoupon', 'prefix',
+          'startNumber', 'endNumber', 'totalCount', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && isValidId(data.workspaceId)
+        && isValidMemberUids(data.memberUids)
+        && data.batchCode is string && data.batchCode.size() >= 2 && data.batchCode.size() <= 40
+        && data.source is string && data.source.size() >= 2 && data.source.size() <= 120
+        && data.receivedByOfficial is string && data.receivedByOfficial.size() >= 2 && data.receivedByOfficial.size() <= 100
+        && isValidDateString(data.receivedDate)
+        && isValidFuelType(data.fuelType)
+        && (data.nominalValue is int || data.nominalValue is float) && data.nominalValue >= 0 && data.nominalValue <= 100000000
+        && (data.litersPerCoupon is int || data.litersPerCoupon is float) && data.litersPerCoupon >= 0 && data.litersPerCoupon <= 10000
+        && data.prefix is string && data.prefix.size() >= 1 && data.prefix.size() <= 24
+        && data.startNumber is int && data.startNumber >= 1 && data.startNumber <= 1000000
+        && data.endNumber is int && data.endNumber >= data.startNumber && data.endNumber <= 1000000
+        && data.totalCount is int && data.totalCount >= 1 && data.totalCount <= 200
+        && data.totalCount == (data.endNumber - data.startNumber + 1)
+        && data.notes is string && data.notes.size() <= 300
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCoupon(data) {
+      return data.keys().hasAll([
+          'ownerId', 'workspaceId', 'memberUids',
+          'batchId', 'batchCode', 'serialNumber', 'sequenceNumber',
+          'fuelType', 'nominalValue', 'litersPerCoupon', 'receivedByOfficial', 'receivedDate',
+          'status', 'distributionId', 'recipientName', 'recipientUnit', 'vehiclePlate',
+          'distributedByName', 'distributedDate', 'usedDate', 'receiptNumber',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'workspaceId', 'memberUids',
+          'batchId', 'batchCode', 'serialNumber', 'sequenceNumber',
+          'fuelType', 'nominalValue', 'litersPerCoupon', 'receivedByOfficial', 'receivedDate',
+          'status', 'distributionId', 'recipientName', 'recipientUnit', 'vehiclePlate',
+          'distributedByName', 'distributedDate', 'usedDate', 'receiptNumber',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && isValidId(data.workspaceId)
+        && isValidMemberUids(data.memberUids)
+        && isValidId(data.batchId)
+        && data.batchCode is string && data.batchCode.size() >= 2 && data.batchCode.size() <= 40
+        && data.serialNumber is string && data.serialNumber.size() >= 2 && data.serialNumber.size() <= 40
+        && data.sequenceNumber is int && data.sequenceNumber >= 1 && data.sequenceNumber <= 1000000
+        && isValidFuelType(data.fuelType)
+        && (data.nominalValue is int || data.nominalValue is float) && data.nominalValue >= 0 && data.nominalValue <= 100000000
+        && (data.litersPerCoupon is int || data.litersPerCoupon is float) && data.litersPerCoupon >= 0 && data.litersPerCoupon <= 10000
+        && data.receivedByOfficial is string && data.receivedByOfficial.size() >= 2 && data.receivedByOfficial.size() <= 100
+        && isValidDateString(data.receivedDate)
+        && data.status in ['Tersedia', 'Dibagikan', 'Terpakai', 'Dibatalkan']
+        && data.distributionId is string && data.distributionId.size() <= 128
+        && data.recipientName is string && data.recipientName.size() <= 100
+        && data.recipientUnit is string && data.recipientUnit.size() <= 100
+        && data.vehiclePlate is string && data.vehiclePlate.size() <= 24
+        && data.distributedByName is string && data.distributedByName.size() <= 100
+        && data.distributedDate is string && (data.distributedDate == '' || isValidDateString(data.distributedDate))
+        && data.usedDate is string && (data.usedDate == '' || isValidDateString(data.usedDate))
+        && data.receiptNumber is string && data.receiptNumber.size() <= 60
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDistribution(data) {
+      return data.keys().hasAll([
+          'ownerId', 'workspaceId', 'memberUids',
+          'handoverNumber', 'recipientName', 'recipientUnit', 'vehiclePlate',
+          'purpose', 'distributedByName', 'distributedDate', 'couponCount',
+          'totalNominal', 'totalLiters', 'serialSummary', 'couponIds', 'status', 'notes',
+          'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId', 'workspaceId', 'memberUids',
+          'handoverNumber', 'recipientName', 'recipientUnit', 'vehiclePlate',
+          'purpose', 'distributedByName', 'distributedDate', 'couponCount',
+          'totalNominal', 'totalLiters', 'serialSummary', 'couponIds', 'status', 'notes',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.ownerId)
+        && isValidId(data.workspaceId)
+        && isValidMemberUids(data.memberUids)
+        && data.handoverNumber is string && data.handoverNumber.size() >= 2 && data.handoverNumber.size() <= 40
+        && data.recipientName is string && data.recipientName.size() >= 2 && data.recipientName.size() <= 100
+        && data.recipientUnit is string && data.recipientUnit.size() >= 1 && data.recipientUnit.size() <= 100
+        && data.vehiclePlate is string && data.vehiclePlate.size() <= 24
+        && data.purpose is string && data.purpose.size() >= 2 && data.purpose.size() <= 240
+        && data.distributedByName is string && data.distributedByName.size() >= 2 && data.distributedByName.size() <= 100
+        && isValidDateString(data.distributedDate)
+        && data.couponCount is int && data.couponCount >= 1 && data.couponCount <= 100
+        && (data.totalNominal is int || data.totalNominal is float) && data.totalNominal >= 0 && data.totalNominal <= 1000000000
+        && (data.totalLiters is int || data.totalLiters is float) && data.totalLiters >= 0 && data.totalLiters <= 1000000
+        && data.serialSummary is string && data.serialSummary.size() >= 2 && data.serialSummary.size() <= 200
+        && data.couponIds is list && data.couponIds.size() >= 1 && data.couponIds.size() <= 100
+        && data.couponIds.size() == data.couponCount
+        && data.couponIds[0] is string && isValidId(data.couponIds[0])
+        && data.status in ['Aktif', 'Selesai', 'Dibatalkan']
+        && data.notes is string && data.notes.size() <= 300
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isBootstrappedAdmin());
+      allow list, create, update, delete: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.uid == request.auth.uid || isBootstrappedAdmin());
+      allow create: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'roleLabel', 'unitName', 'activeWorkspaceId', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /workspaces/{workspaceId} {
+      allow get: if isValidId(workspaceId) && isSignedIn() && (isDocMember(existing()) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || request.auth.uid in resource.data.memberUids || isBootstrappedAdmin());
+      allow create: if isValidId(workspaceId)
+        && isSignedIn()
+        && isValidWorkspace(incoming())
+        && incoming().ownerId == request.auth.uid
+        && request.auth.uid in incoming().memberUids
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(workspaceId)
+        && isSignedIn()
+        && isValidWorkspace(incoming())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Owner updates workspace name or rotates invite code
+          (
+            (existing().ownerId == request.auth.uid || isAdmin())
+            && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'inviteCode', 'memberUids', 'memberNames', 'updatedAt'])
+          ) ||
+          // Action 2: Family member joins via verified active invite token
+          (
+            isValidId(incoming().lastJoinCode)
+            && exists(/databases/$(database)/documents/workspaces/$(workspaceId)/invites/$(incoming().lastJoinCode))
+            && get(/databases/$(database)/documents/workspaces/$(workspaceId)/invites/$(incoming().lastJoinCode)).data.active == true
+            && request.auth.uid in incoming().memberUids
+            && incoming().memberUids.hasAll(existing().memberUids)
+            && incoming().memberNames.keys().hasAll(existing().memberNames.keys())
+            && (incoming().memberUids.size() == existing().memberUids.size() || incoming().memberUids.size() == existing().memberUids.size() + 1)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'memberNames', 'lastJoinCode', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(workspaceId) && isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+
+      match /invites/{inviteCode} {
+        allow get: if isValidId(workspaceId) && isValidId(inviteCode) && isSignedIn();
+        allow list: if false;
+        allow create: if isValidId(workspaceId)
+          && isValidId(inviteCode)
+          && isSignedIn()
+          && isValidInvite(incoming(), workspaceId)
+          && incoming().ownerId == request.auth.uid
+          && incoming().createdAt == request.time
+          && (
+            exists(/databases/$(database)/documents/workspaces/$(workspaceId))
+              ? get(/databases/$(database)/documents/workspaces/$(workspaceId)).data.ownerId == request.auth.uid
+              : existsAfter(/databases/$(database)/documents/workspaces/$(workspaceId))
+          );
+        allow update: if isValidId(workspaceId)
+          && isValidId(inviteCode)
+          && isSignedIn()
+          && isValidInvite(incoming(), workspaceId)
+          && (existing().ownerId == request.auth.uid || isAdmin())
+          && incoming().ownerId == existing().ownerId
+          && incoming().workspaceId == existing().workspaceId
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['active', 'workspaceName']);
+        allow delete: if isValidId(workspaceId) && isValidId(inviteCode) && isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+      }
+    }
+
+    match /batches/{batchId} {
+      allow get: if isValidId(batchId) && isSignedIn() && (isDocMember(existing()) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || (resource.data.keys().hasAll(['memberUids']) && request.auth.uid in resource.data.memberUids) || isBootstrappedAdmin());
+      allow create: if isValidId(batchId)
+        && isSignedIn()
+        && isValidCouponBatch(incoming())
+        && incoming().ownerId == request.auth.uid
+        && request.auth.uid in incoming().memberUids
+        && isWorkspaceMember(incoming().workspaceId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(batchId)
+        && isSignedIn()
+        && isValidCouponBatch(incoming())
+        && (isDocMember(existing()) || isAdmin())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (
+            (!existing().keys().hasAll(['workspaceId', 'memberUids']) && existing().ownerId == request.auth.uid)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['workspaceId', 'memberUids', 'updatedAt'])
+          ) ||
+          (
+            incoming().workspaceId == existing().workspaceId
+            && existing().ownerId in incoming().memberUids
+            && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+          ) ||
+          (
+            incoming().workspaceId == existing().workspaceId
+            && incoming().diff(existing()).affectedKeys().hasOnly(['notes', 'source', 'receivedByOfficial', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(batchId) && isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /coupons/{couponId} {
+      allow get: if isValidId(couponId) && isSignedIn() && (isDocMember(existing()) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || (resource.data.keys().hasAll(['memberUids']) && request.auth.uid in resource.data.memberUids) || isBootstrappedAdmin());
+      allow create: if isValidId(couponId)
+        && isSignedIn()
+        && isValidCoupon(incoming())
+        && incoming().ownerId == request.auth.uid
+        && request.auth.uid in incoming().memberUids
+        && isWorkspaceMember(incoming().workspaceId)
+        && incoming().status == 'Tersedia'
+        && incoming().distributionId == ''
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && (exists(/databases/$(database)/documents/batches/$(incoming().batchId))
+            || existsAfter(/databases/$(database)/documents/batches/$(incoming().batchId)));
+      allow update: if isValidId(couponId)
+        && isSignedIn()
+        && isValidCoupon(incoming())
+        && (isDocMember(existing()) || isAdmin())
+        && incoming().ownerId == existing().ownerId
+        && incoming().batchId == existing().batchId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          // Migration of legacy owner doc into workspace
+          (
+            !existing().keys().hasAll(['workspaceId', 'memberUids'])
+            && existing().ownerId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['workspaceId', 'memberUids', 'updatedAt'])
+          ) ||
+          // Syncing workspace memberUids across existing coupons
+          (
+            incoming().workspaceId == existing().workspaceId
+            && existing().ownerId in incoming().memberUids
+            && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+          ) ||
+          (
+            incoming().workspaceId == existing().workspaceId
+            && !(existing().status in ['Terpakai', 'Dibatalkan']) && (
+              // Action 1: Distribute available coupon atomically with Distribution record
+              (
+                existing().status == 'Tersedia'
+                && incoming().status == 'Dibagikan'
+                && isValidId(incoming().distributionId)
+                && incoming().recipientName.size() >= 2
+                && isValidDateString(incoming().distributedDate)
+                && existsAfter(/databases/$(database)/documents/distributions/$(incoming().distributionId))
+                && incoming().diff(existing()).affectedKeys().hasOnly([
+                  'status', 'distributionId', 'recipientName', 'recipientUnit',
+                  'vehiclePlate', 'distributedByName', 'distributedDate', 'updatedAt'
+                ])
+              ) ||
+              // Action 2: Mark distributed coupon as used/reported
+              (
+                existing().status == 'Dibagikan'
+                && incoming().status == 'Terpakai'
+                && isValidDateString(incoming().usedDate)
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'usedDate', 'receiptNumber', 'updatedAt'])
+              ) ||
+              // Action 3: Return distributed coupon back to available stock
+              (
+                existing().status == 'Dibagikan'
+                && incoming().status == 'Tersedia'
+                && incoming().distributionId == ''
+                && incoming().recipientName == ''
+                && incoming().recipientUnit == ''
+                && incoming().vehiclePlate == ''
+                && incoming().distributedByName == ''
+                && incoming().distributedDate == ''
+                && incoming().diff(existing()).affectedKeys().hasOnly([
+                  'status', 'distributionId', 'recipientName', 'recipientUnit',
+                  'vehiclePlate', 'distributedByName', 'distributedDate', 'updatedAt'
+                ])
+              ) ||
+              // Action 4: Cancel coupon
+              (
+                existing().status in ['Tersedia', 'Dibagikan']
+                && incoming().status == 'Dibatalkan'
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+              )
+            )
+          )
+        );
+      allow delete: if isValidId(couponId) && isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /distributions/{distributionId} {
+      allow get: if isValidId(distributionId) && isSignedIn() && (isDocMember(existing()) || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || (resource.data.keys().hasAll(['memberUids']) && request.auth.uid in resource.data.memberUids) || isBootstrappedAdmin());
+      allow create: if isValidId(distributionId)
+        && isSignedIn()
+        && isValidDistribution(incoming())
+        && incoming().ownerId == request.auth.uid
+        && request.auth.uid in incoming().memberUids
+        && isWorkspaceMember(incoming().workspaceId)
+        && incoming().status == 'Aktif'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(distributionId)
+        && isSignedIn()
+        && isValidDistribution(incoming())
+        && (isDocMember(existing()) || isAdmin())
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            !existing().keys().hasAll(['workspaceId', 'memberUids'])
+            && existing().ownerId == request.auth.uid
+            && incoming().diff(existing()).affectedKeys().hasOnly(['workspaceId', 'memberUids', 'updatedAt'])
+          ) ||
+          (
+            incoming().workspaceId == existing().workspaceId
+            && existing().ownerId in incoming().memberUids
+            && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])
+          ) ||
+          (
+            incoming().workspaceId == existing().workspaceId
+            && !(existing().status in ['Selesai', 'Dibatalkan']) && (
+              // Action 1: Mark distribution completed
+              (
+                existing().status == 'Aktif'
+                && incoming().status == 'Selesai'
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'updatedAt'])
+              ) ||
+              // Action 2: Cancel distribution
+              (
+                existing().status == 'Aktif'
+                && incoming().status == 'Dibatalkan'
+                && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'notes', 'updatedAt'])
+              ) ||
+              // Action 3: Update distribution notes
+              (
+                existing().status == 'Aktif'
+                && incoming().status == 'Aktif'
+                && incoming().diff(existing()).affectedKeys().hasOnly(['notes', 'updatedAt'])
+              )
+            )
+          )
+        );
+      allow delete: if isValidId(distributionId) && isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+  }
+}

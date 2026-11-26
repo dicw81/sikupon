@@ -1,0 +1,487 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Profil pengguna dan ruang kerja keluarga yang sedang aktif.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "roleLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "unitName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "activeWorkspaceId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "roleLabel", "unitName", "createdAt", "updatedAt"]
+    },
+    "FamilyWorkspace": {
+      "title": "FamilyWorkspace",
+      "description": "Ruang kerja bersama keluarga untuk mengelola kupon BBM secara kolaboratif.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "inviteCode": {
+          "type": "string",
+          "minLength": 6,
+          "maxLength": 32,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "lastJoinCode": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "memberUids": {
+          "type": "array"
+        },
+        "memberNames": {
+          "type": "object"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "name",
+        "inviteCode",
+        "lastJoinCode",
+        "memberUids",
+        "memberNames",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "WorkspaceInvite": {
+      "title": "WorkspaceInvite",
+      "description": "Token undangan rahasia untuk bergabung ke ruang kerja keluarga.",
+      "type": "object",
+      "properties": {
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "workspaceName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["workspaceId", "workspaceName", "ownerId", "active", "createdAt"]
+    },
+    "CouponBatch": {
+      "title": "CouponBatch",
+      "description": "Batch penerimaan kupon BBM yang didata sebelum dibagikan.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "memberUids": {
+          "type": "array"
+        },
+        "batchCode": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "source": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 120
+        },
+        "receivedByOfficial": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "receivedDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "fuelType": {
+          "type": "string",
+          "enum": ["Pertamax", "Pertalite", "Dexlite", "Solar"],
+          "maxLength": 20
+        },
+        "nominalValue": {
+          "type": "number"
+        },
+        "litersPerCoupon": {
+          "type": "number"
+        },
+        "prefix": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24
+        },
+        "startNumber": {
+          "type": "integer"
+        },
+        "endNumber": {
+          "type": "integer"
+        },
+        "totalCount": {
+          "type": "integer"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "workspaceId",
+        "memberUids",
+        "batchCode",
+        "source",
+        "receivedByOfficial",
+        "receivedDate",
+        "fuelType",
+        "nominalValue",
+        "litersPerCoupon",
+        "prefix",
+        "startNumber",
+        "endNumber",
+        "totalCount",
+        "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Coupon": {
+      "title": "Coupon",
+      "description": "Lembar kupon BBM individual dengan nomor seri dan status pelacakan.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "memberUids": {
+          "type": "array"
+        },
+        "batchId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "batchCode": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "serialNumber": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "sequenceNumber": {
+          "type": "integer"
+        },
+        "fuelType": {
+          "type": "string",
+          "enum": ["Pertamax", "Pertalite", "Dexlite", "Solar"],
+          "maxLength": 20
+        },
+        "nominalValue": {
+          "type": "number"
+        },
+        "litersPerCoupon": {
+          "type": "number"
+        },
+        "receivedByOfficial": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "receivedDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Tersedia", "Dibagikan", "Terpakai", "Dibatalkan"],
+          "maxLength": 20
+        },
+        "distributionId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "recipientName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "recipientUnit": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "vehiclePlate": {
+          "type": "string",
+          "maxLength": 24
+        },
+        "distributedByName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "distributedDate": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "usedDate": {
+          "type": "string",
+          "maxLength": 10
+        },
+        "receiptNumber": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "workspaceId",
+        "memberUids",
+        "batchId",
+        "batchCode",
+        "serialNumber",
+        "sequenceNumber",
+        "fuelType",
+        "nominalValue",
+        "litersPerCoupon",
+        "receivedByOfficial",
+        "receivedDate",
+        "status",
+        "distributionId",
+        "recipientName",
+        "recipientUnit",
+        "vehiclePlate",
+        "distributedByName",
+        "distributedDate",
+        "usedDate",
+        "receiptNumber",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Distribution": {
+      "title": "Distribution",
+      "description": "Berita acara serah terima pembagian kupon BBM kepada penerima.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "workspaceId": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "memberUids": {
+          "type": "array"
+        },
+        "handoverNumber": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "recipientName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "recipientUnit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "vehiclePlate": {
+          "type": "string",
+          "maxLength": 24
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 240
+        },
+        "distributedByName": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 100
+        },
+        "distributedDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "couponCount": {
+          "type": "integer"
+        },
+        "totalNominal": {
+          "type": "number"
+        },
+        "totalLiters": {
+          "type": "number"
+        },
+        "serialSummary": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 200
+        },
+        "couponIds": {
+          "type": "array"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Aktif", "Selesai", "Dibatalkan"],
+          "maxLength": 20
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "ownerId",
+        "workspaceId",
+        "memberUids",
+        "handoverNumber",
+        "recipientName",
+        "recipientUnit",
+        "vehiclePlate",
+        "purpose",
+        "distributedByName",
+        "distributedDate",
+        "couponCount",
+        "totalNominal",
+        "totalLiters",
+        "serialSummary",
+        "couponIds",
+        "status",
+        "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Profil pengguna terautentikasi dan ruang kerja aktif."
+    },
+    "/workspaces/{workspaceId}": {
+      "schema": { "$ref": "#/entities/FamilyWorkspace" },
+      "description": "Ruang kerja keluarga untuk berbagi inventaris dan pelaporan kupon BBM."
+    },
+    "/workspaces/{workspaceId}/invites/{inviteCode}": {
+      "schema": { "$ref": "#/entities/WorkspaceInvite" },
+      "description": "Token undangan rahasia untuk bergabung ke ruang kerja keluarga."
+    },
+    "/batches/{batchId}": {
+      "schema": { "$ref": "#/entities/CouponBatch" },
+      "description": "Daftar batch penerimaan kupon BBM sebelum didistribusikan."
+    },
+    "/coupons/{couponId}": {
+      "schema": { "$ref": "#/entities/Coupon" },
+      "description": "Data kupon BBM per lembar lengkap dengan nomor seri dan status."
+    },
+    "/distributions/{distributionId}": {
+      "schema": { "$ref": "#/entities/Distribution" },
+      "description": "Catatan transaksi pembagian kupon BBM dan berita acara serah terima."
+    }
+  }
+}
